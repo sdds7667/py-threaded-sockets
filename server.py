@@ -59,11 +59,18 @@ def threaded_client(client, _connections):
         elif response.command is CommandList.ReceiveKeyList:
             print(f"Key list received, {response.key_list}")
             with data_lock:
-                ownership.update({x: client for x in response.key_list})
-                data.update({x: None for x in response.key_list})
-                listeners.update({x: [] for x in response.key_list})
-                debug_server()
-            broadcast(ReceiveKeyListCommand(None, list(data.keys())), client)
+                for i in response.key_list:
+                    if i in ownership:
+                        print("Refused")
+                        RefuseKeyListCommand(client).send()
+                        break
+                else:
+                    print("Updating list")
+                    ownership.update({x: client for x in response.key_list})
+                    data.update({x: None for x in response.key_list})
+                    listeners.update({x: [] for x in response.key_list})
+                    broadcast(ReceiveKeyListCommand(None, list(data.keys())), client)
+                    debug_server()
 
         elif response.command is CommandList.AddKey:
             print(f"Request to add key {response.key}")

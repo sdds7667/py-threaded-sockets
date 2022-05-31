@@ -13,10 +13,6 @@ data_list = []
 my_music = {}
 
 
-def send_dict(d: Dict):
-    ClientSocket.send(json.dumps(d).encode("utf-8"))
-
-
 def generate_music_list():
     global my_music
     my_music.clear()
@@ -63,15 +59,13 @@ def threaded_client(client: socket):
             # reshuffle the key list
             with response_lock:
                 generate_music_list()
-                SendKeyListCommand(client, list(my_music.keys())).send()
+                ReceiveKeyListCommand(client, list(my_music.keys())).send()
         elif response.command is CommandList.RefuseNewKey:
-            with response_lock:
-                request = find_request_by_key(response.key)
-                if request is None:
-                    print("Refused a key that does not exist")
-                else:
-                    request.response = response
-                sent_requests.remove(request)
+            music_object = my_music[response.key]
+            del my_music[response.key]
+            new_key = str(uuid.uuid4())
+            my_music[new_key] = music_object
+            AddKeyCommand(ClientSocket, new_key).send()
 
         elif response.command is CommandList.RefuseObjectRequest:
             with response_lock:
@@ -123,6 +117,36 @@ def handle_menu(option: int):
     elif option == 3:
         ReceiveKeyListCommand(ClientSocket, list(my_music.keys())).send()
 
+    elif option == 4:
+        new_music = input("New Music> ")
+        data_list.append(new_music)
+        new_key = new_music
+        my_music[new_key] = new_music
+        AddKeyCommand(ClientSocket, new_key).send()
+
+    elif option == 5:
+
+        for i, v in enumerate(data_list):
+            print(f"{i + 1}) {v}")
+        option = 0
+        while option == 0:
+            try:
+                option = int(input(">> "))
+                if not 1 <= option <= len(data_list):
+                    option = 0
+                    continue
+            except ValueError:
+                continue
+
+        k = None
+        for key, value in my_music.items():
+            if value == data_list[option - 1]:
+                k = key
+                break
+        data_list.pop(option - 1)
+        del my_music[k]
+        DeleteKeyCommand(ClientSocket, k).send()
+
 
 if __name__ == '__main__':
     with open(sys.argv[1], "r") as f:
@@ -144,7 +168,9 @@ if __name__ == '__main__':
         print("1) Show all keys")
         print("2) Receive by key")
         print("3) Send our music")
+        print("4) Add new object")
+        print("5) Delete object")
         try:
             handle_menu(int(input("> ")))
         except ValueError:
-         print("NaN")
+            print("NaN")
